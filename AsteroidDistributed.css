@@ -1,0 +1,19 @@
+header {
+    /* light yellow background for header info*/
+    background-color: lightyellow;
+}
+
+/* center align header info */
+h1 {
+    text-align: center;
+}
+
+h2 {
+    text-align: center;
+}
+
+div {
+    padding: 5px 20px 5px 20px;
+    border: 1px solid black;
+}
+

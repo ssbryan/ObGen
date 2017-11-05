@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <title>Asteroid Object Initialization</title>
+    <meta charset="utf-8">
+    <meta name="description" content="Asteroid Project">
+    <meta name="author" content="Stephen Bryan">
+    <link rel="stylesheet" href="AsteroidDistributed.css">
+    <script src="AsteroidDistributed.js"></script>
+</head>
+<body>
+    <header>
+    <h1>Asteroid Object Initialization</h1>
+    <h2>Distributed Objects</h2>
+    </header>
+    <br>
+    <label for="numberObj">Number of Objects</label>
+    <input type=text id=numberObj value="100">
+    <p>Mass</p>
+    <div id="massGp">
+        <label for="minMass">Min</label>
+        <input type=text id=minMass value="1">
+        <label for="maxMass">Max</label>
+        <input type=text id=maxMass value="1e6">
+        <p>Mass distribution:</p>
+        <select id="massDist">
+            <option value="smallNum">Weighted small (m**1/2, then squared: avg ~ max/4)</option>
+            <option value="uniform">Uniform (avg ~ max/2)</option>
+            <option value="smallerNum">Weighted smaller (m**1/4, then **4: avg ~ max/16)</option>
+        </select>
+    </div>
+    <br>
+    <p>Velocity/Momentum</p>
+    <div id="v-pGp">
+        <label for="minVP">Min</label>
+        <input type=text id=minVP value="0.1">
+        <label for="maxVP">Max</label>
+        <input type=text id=maxVP value="1">
+        <p>Velocity/Momentum Distribution:</p>
+        <select id="vpDist">
+            <option value="uniformV">Uniform Velocity</option>
+            <option value="uniformP">Uniform Momentum</option>
+            <option value="favorLowV">Favor Low Velocity</option>
+            <option value="favorLowP">Favor Low Momentum</option>
+        </select>
+    </div>
+    <br>
+    <p>Environment</p>
+    <div id="envtGp">
+        <label for="spanD">Span</label>
+        <input type=text id=spanD value="1e5">
+        <p>Object Distribution:</p>
+        <select id="objDist">
+            <option value="uniformD">Uniform</option>
+            <option value="radialD">Radial, 1/R</option>
+            <option value="radial2D">Radial, 1/R**2</option>
+        </select>
+    </div>
+    <br>
+    <p>Options</p>
+    <div id="optionstGp">
+        <label for="momtolOpt">Momentum tolerance</label>
+        <input type=text id=momtolOpt value="1e-4">
+        <label for="dvnormtolOpt">DV normal tolerance</label>
+        <input type=text id=dvnormtolOpt value="1e-5">
+        <label for="runsOpt">Runs</label>
+        <input type=text id=runsOpt value="1e6">
+        <label for="tstepOpt">Step Size</label>
+        <input type=text id=tstepOpt value="1">
+        <label for="minvforcheckOpt">Min Vel for Check</label>
+        <input type=text id=minvforcheckOpt value="0.001">
+    </div>
+    <br>
+    <button type="button" id="createText"> Create Initialization Text</button>
+    <p><span id="avgdata"></p>
+    <p><span id="cmdata"></p>
+    <p><span id="momdata"></p>
+    <p><span id="angmomdata"></p>
+    <br>
+    <pre id=initText></pre>
+    <main></main>
+    <footer>
+    </footer>
+ </body>
+</html>
