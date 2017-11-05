@@ -30,3 +30,12 @@
 *.exe
 *.out
 *.app
+*.tlog
+*.iobj
+*.ipdb
+*.log
+*.pdb
+*.res
+.vs/ObGen/v14/.suo
+*.db
+*.opendb
