@@ -6,6 +6,8 @@
 #include "ObGenDlg.h"
 #include "DlgShowData.h"
 
+#include <map>
+#include <set>
 #include <random>
 #include <fstream>
 #include <io.h>
@@ -15,8 +17,13 @@
 #define new DEBUG_NEW
 #endif
 
+const double G = 6.67408e-11;
+
 double GetUniformRandomDouble(double rmin, double rmax);
 double GetExponentialRandomDouble(double rmax);
+
+// count of initially overlapping locs
+static int hasOverlap = 0;
 
 // CAboutDlg dialog used for App About
 
@@ -82,22 +89,23 @@ BEGIN_MESSAGE_MAP(ObGenDlg, CDialogEx)
     ON_BN_CLICKED(IDC_VIEW, OnBnClickedView)
     ON_BN_CLICKED(IDC_SIMULATE, OnBnClickedSimulate)
     ON_BN_CLICKED(IDCANCEL, OnBnClickedCancel)
-    ON_BN_CLICKED(IDC_UNIFORM_DIST, OnBnClickedUniformDist)
-    ON_BN_CLICKED(IDC_EXP_DIST, OnBnClickedExpDist)
-    ON_EN_CHANGE(IDC_NUM_OBJS, &ObGenDlg::OnEnChangeNumObjs)
-    ON_EN_CHANGE(IDC_MIN_MASS, &ObGenDlg::OnEnChangeMinMass)
-    ON_EN_CHANGE(IDC_MAX_MASS, &ObGenDlg::OnEnChangeMaxMass)
-    ON_CBN_SELCHANGE(IDC_COMBO_MASS, &ObGenDlg::OnCbnSelchangeComboMass)
-    ON_EN_CHANGE(IDC_MIN_VEL_MOM, &ObGenDlg::OnEnChangeMinVelMom)
-    ON_EN_CHANGE(IDC_MAX_VEL_MOM, &ObGenDlg::OnEnChangeMaxVelMom)
-    ON_CBN_SELCHANGE(IDC_COMBO_VM, &ObGenDlg::OnCbnSelchangeComboVm)
-    ON_EN_CHANGE(IDC_VOL_RADIUS, &ObGenDlg::OnEnChangeVolRadius)
-    ON_EN_CHANGE(IDC_OPT_MOMTOL, &ObGenDlg::OnEnChangeOptMomtol)
-    ON_EN_CHANGE(IDC_OPT_DVNORMTOL, &ObGenDlg::OnEnChangeOptDvnormtol)
-    ON_EN_CHANGE(IDC_OPT_RUNS, &ObGenDlg::OnEnChangeOptRuns)
-    ON_EN_CHANGE(IDC_OPT_TSTEP, &ObGenDlg::OnEnChangeOptTstep)
-    ON_EN_CHANGE(IDC_OPT_MINVEL, &ObGenDlg::OnEnChangeOptMinvel)
-    ON_BN_CLICKED(IDC_FIND_SIM, &ObGenDlg::OnBnClickedFindSim)
+//    ON_BN_CLICKED(IDC_UNIFORM_DIST, OnBnClickedUniformDist)
+//    ON_BN_CLICKED(IDC_EXP_DIST, OnBnClickedExpDist)
+    ON_EN_CHANGE(IDC_NUM_OBJS, OnEnChangeNumObjs)
+    ON_EN_CHANGE(IDC_MIN_MASS, OnEnChangeMinMass)
+    ON_EN_CHANGE(IDC_MAX_MASS, OnEnChangeMaxMass)
+    ON_CBN_SELCHANGE(IDC_COMBO_MASS, OnCbnSelchangeComboMass)
+    ON_EN_CHANGE(IDC_MIN_VEL_MOM, OnEnChangeMinVelMom)
+    ON_EN_CHANGE(IDC_MAX_VEL_MOM, OnEnChangeMaxVelMom)
+    ON_CBN_SELCHANGE(IDC_COMBO_VM, OnCbnSelchangeComboVm)
+    ON_EN_CHANGE(IDC_VOL_RADIUS, OnEnChangeVolRadius)
+    ON_EN_CHANGE(IDC_OPT_MOMTOL, OnEnChangeOptMomtol)
+    ON_EN_CHANGE(IDC_OPT_DVNORMTOL, OnEnChangeOptDvnormtol)
+    ON_EN_CHANGE(IDC_OPT_RUNS, OnEnChangeOptRuns)
+    ON_EN_CHANGE(IDC_OPT_TSTEP, OnEnChangeOptTstep)
+    ON_EN_CHANGE(IDC_OPT_MINVEL, OnEnChangeOptMinvel)
+    ON_BN_CLICKED(IDC_FIND_SIM, OnBnClickedFindSim)
+    ON_CBN_SELCHANGE(IDC_LOC_DIST, OnCbnSelchangeLocDist)
 END_MESSAGE_MAP()
 
 
@@ -134,13 +142,12 @@ BOOL ObGenDlg::OnInitDialog()
     SetIcon(m_hIcon, TRUE);			// Set big icon
     SetIcon(m_hIcon, FALSE);		// Set small icon
 
-    GetDlgItem(IDC_NUM_OBJS)->SetWindowText(CString("100"));
-    GetDlgItem(IDC_VOL_RADIUS)->SetWindowText(CString("10000.0"));
-    GetDlgItem(IDC_MIN_MASS)->SetWindowText(CString("1.0"));
-    GetDlgItem(IDC_MAX_MASS)->SetWindowText(CString("1000000.0"));
-    GetDlgItem(IDC_LOC_LAMBDA)->SetWindowText(CString("0"));
-    GetDlgItem(IDC_MIN_VEL_MOM)->SetWindowText(CString("0.1"));
-    GetDlgItem(IDC_MAX_VEL_MOM)->SetWindowText(CString("1.0"));
+    GetDlgItem(IDC_NUM_OBJS)->SetWindowText(CString("1000"));
+    GetDlgItem(IDC_VOL_RADIUS)->SetWindowText(CString("1.0e5"));
+    GetDlgItem(IDC_MIN_MASS)->SetWindowText(CString("100.0"));
+    GetDlgItem(IDC_MAX_MASS)->SetWindowText(CString("1.0e6"));
+    GetDlgItem(IDC_MIN_VEL_MOM)->SetWindowText(CString("1.0"));
+    GetDlgItem(IDC_MAX_VEL_MOM)->SetWindowText(CString("1.0e6"));
     GetDlgItem(IDC_OPT_MOMTOL)->SetWindowText(CString("1.0e-4"));
     GetDlgItem(IDC_OPT_DVNORMTOL)->SetWindowText(CString("1.0e-5"));
     GetDlgItem(IDC_OPT_RUNS)->SetWindowText(CString("1.0e6"));
@@ -166,13 +173,22 @@ BOOL ObGenDlg::OnInitDialog()
     vmcombo->AddString(CString("Exponential (velocity)"));
     vmcombo->SetCurSel(0);
 
+    // set up location distribution combo
+    CComboBox* locombo = (CComboBox*)GetDlgItem(IDC_LOC_DIST);
+    assert(locombo);
+    locombo->AddString(CString("Uniform"));
+    locombo->AddString(CString("Uniform-weighted low"));
+    locombo->AddString(CString("Uniform-weighted lower"));
+    locombo->AddString(CString("Exponential"));
+    locombo->SetCurSel(0);
+
     // set up location distribution radio buttons
-    CButton* mdist = (CButton*)GetDlgItem(IDC_UNIFORM_DIST);
-    mdist->SetCheck(TRUE);
+//    CButton* mdist = (CButton*)GetDlgItem(IDC_UNIFORM_DIST);
+//    mdist->SetCheck(TRUE);
     mLocationDist = 0;
-    GetDlgItem(IDC_LOC_LAMBDA)->EnableWindow(FALSE);
-    CButton* mdiste = (CButton*)GetDlgItem(IDC_EXP_DIST);
-    mdiste->SetCheck(FALSE);
+//    GetDlgItem(IDC_LOC_LAMBDA)->EnableWindow(FALSE);
+//    CButton* mdiste = (CButton*)GetDlgItem(IDC_EXP_DIST);
+//    mdiste->SetCheck(FALSE);
 
     return TRUE;  // return TRUE  unless you set the focus to a control
 }
@@ -332,15 +348,18 @@ bool ObGenDlg::SetUpData(void)
 {
     CString str;
     bool okay = (GetDlgItemText(IDC_NUM_OBJS, str) != 0);
-    CString format("%d");
-    int num = 0;
-    okay = okay && (swscanf_s((LPCWSTR)str, (LPCWSTR)format, &num) == 1);
+    CString dformat("%d");
+    CString format("%f");
+    int dnum = 0;
+    float num = 0;
+    okay = okay && (swscanf_s((LPCWSTR)str, (LPCWSTR)dformat, &dnum) == 1);
 
     if (okay)
     {
-        mNumObjects = num;
+        mNumObjects = dnum;
     }
 
+    // get mass min/max
     okay = (GetDlgItemText(IDC_MIN_MASS, str) != 0);
     num = 0;
     okay = okay && (swscanf_s((LPCWSTR)str, (LPCWSTR)format, &num) == 1);
@@ -359,8 +378,26 @@ bool ObGenDlg::SetUpData(void)
         mMassMax = num;
     }
 
-    // get mass distribution
+    // get velocity/momentum min/max
+    okay = (GetDlgItemText(IDC_MIN_VEL_MOM, str) != 0);
+    num = 0;
+    okay = okay && (swscanf_s((LPCWSTR)str, (LPCWSTR)format, &num) == 1);
 
+    if (okay)
+    {
+        mVMMin = num;
+    }
+
+    okay = (GetDlgItemText(IDC_MAX_VEL_MOM, str) != 0);
+    num = 0;
+    okay = okay && (swscanf_s((LPCWSTR)str, (LPCWSTR)format, &num) == 1);
+
+    if (okay)
+    {
+        mVMMax = num;
+    }
+
+    // get spatial extent
     okay = (GetDlgItemText(IDC_VOL_RADIUS, str) != 0);
     num = 0;
     okay = okay && (swscanf_s((LPCWSTR)str, (LPCWSTR)format, &num) == 1);
@@ -384,6 +421,11 @@ bool ObGenDlg::SetUpData(void)
 
 bool ObGenDlg::CreateObjects(void)
 {
+    // create objects in a tmp list
+    // sort based on mass, with higher mass objects first
+    // scale momentum from origin
+    hasOverlap = 0;
+
     if (!Validate())
     {
         return false;
@@ -391,16 +433,53 @@ bool ObGenDlg::CreateObjects(void)
 
     mObjects.clear();
 
+    CComboBox* mcombo = (CComboBox*)GetDlgItem(IDC_COMBO_MASS);
+    mMassDist = mcombo->GetCurSel();
+
+    CComboBox* vmcombo = (CComboBox*)GetDlgItem(IDC_COMBO_VM);
+    mVMDist = vmcombo->GetCurSel();
+
+    CComboBox* loccombo = (CComboBox*)GetDlgItem(IDC_LOC_DIST);
+    mLocationDist = loccombo->GetCurSel();
+
     for (int i = 0; i < mNumObjects; ++i)
     {
         double m = GetMass(mMassMin, mMassMax, mMassDist);
         double x = GetLoc(mVolumeRad, mLocationDist);
         double y = GetLoc(mVolumeRad, mLocationDist);
         double z = GetLoc(mVolumeRad, mLocationDist);
+        int xflag = 0;
+        int yflag = 0;
+        int zflag = 0;
+        int xflag2 = 0;
+        int yflag2 = 0;
+        int zflag2 = 0;
+        CalcFlags(x, y, z, xflag, xflag2, yflag, yflag2, zflag, zflag2);
+
+        // from Object.cpp in asteroid sln
+        // determine radius: rho = M / V, V = M / rho
+
+        // rho = 3g/cc plus porosity discount of 50% (for now - see ObjData.cpp in ObjDatad project)
+        // rho = 3g/cc plus porosity discount of 50%, plus random element that increases 
+        double rho0 = 3000; // 3g/cc (* 1e-3kg/g * 1e6cc/m^3), similar to carbonaceous chondrites
+        double porosity = 0.5; // 50% porosity, changes effective rho
+
+                               // should do an "if" to see if a random element is needed (solid rock, not rubble), 
+                               // or if we want a nickel-iron chunk at 7.9g/cc (3.84% of meteorites)
+        double rho = rho0 * porosity;
+
+        // volume
+        double v = m / rho;
+
+        // R = (3 * V / (4 * pi))^(1/3)
+        double radius = pow(3 * v / (4 * M_PI), 0.33333333);
+
+        AdjustLocForOverlap(x, y, z, radius, xflag, xflag2, yflag, yflag2, zflag, zflag2);
+
         double vx = GetVP(m, mVMMin, mVMMax, mVMDist);
         double vy = GetVP(m, mVMMin, mVMMax, mVMDist);
         double vz = GetVP(m, mVMMin, mVMMax, mVMDist);
-        mObjects.push_back(Object(m, x, y, z, vx, vy, vz));
+        mObjects.push_back(Object(m, x, y, z, vx, vy, vz, radius, xflag, xflag2, yflag, yflag2, zflag, zflag2));
     }
 
     // mark so we can reuse Objects
@@ -408,19 +487,19 @@ bool ObGenDlg::CreateObjects(void)
     return true;
 }
 
-void ObGenDlg::OnBnClickedUniformDist()
-{
-    mDataChanged = true;
-    mLocationDist = 0;
-    GetDlgItem(IDC_LOC_LAMBDA)->EnableWindow(FALSE);
-}
-
-void ObGenDlg::OnBnClickedExpDist()
-{
-    mDataChanged = true;
-    mLocationDist = 1;
-    GetDlgItem(IDC_LOC_LAMBDA)->EnableWindow(TRUE);
-}
+//void ObGenDlg::OnBnClickedUniformDist()
+//{
+//    mDataChanged = true;
+//    mLocationDist = 0;
+//    GetDlgItem(IDC_LOC_LAMBDA)->EnableWindow(FALSE);
+//}
+//
+//void ObGenDlg::OnBnClickedExpDist()
+//{
+//    mDataChanged = true;
+//    mLocationDist = 1;
+//    GetDlgItem(IDC_LOC_LAMBDA)->EnableWindow(TRUE);
+//}
 
 double ObGenDlg::GetMass(double mmin, double mmax, int dist)
 {
@@ -465,16 +544,34 @@ double ObGenDlg::GetMass(double mmin, double mmax, int dist)
 
 double ObGenDlg::GetLoc(double locmax, int dist)
 {
+    // sign randomized before return
     double d = locmax;
 
-    if (dist == 0)
+    switch (dist)
     {
-        // uniform over entire space, use diameter = 2 * locmax
-        // then subtract locmax to center at 0
-        d = GetUniformRandomDouble(0, 2 * locmax);
-        d -= locmax;
+    case 0:
+    {
+        // uniform over entire space
+        d = GetUniformRandomDouble(0, locmax);
+        break;
     }
-    else
+    case 1: // Uniform-weighted low
+    {
+        double mxrt = std::sqrt(locmax);
+        d = GetUniformRandomDouble(0, mxrt);
+        d *= d;
+        break;
+    }
+    case 2:  // Uniform-weighted lower
+    {
+        double mxrt = std::sqrt(locmax);
+        double mxrt4 = std::sqrt(mxrt);
+        d = GetUniformRandomDouble(0, mxrt4);
+        d *= d;
+        d *= d;
+        break;
+    }
+    case 3:
     {
         // this gives the magnitude but not the sign
         double val = mLambda;
@@ -485,11 +582,13 @@ double ObGenDlg::GetLoc(double locmax, int dist)
         }
 
         d = GetExponentialRandomDouble(val);
+        break;
+    }
+    }
 
-        if (rand() > RAND_MAX / 2)
-        {
-            d = -d;
-        }
+    if (rand() > RAND_MAX / 2)
+    {
+        d = -d;
     }
 
     return d;
@@ -616,6 +715,9 @@ void ObGenDlg::ShowData(CString& str)
 bool ObGenDlg::CreateAnalyticString(CString& str)
 {
     bool isOkay = true;
+    // kinetic and potential energy
+    double ke = 0;
+    double pe = 0;
 
     if (mDataChanged)
     {
@@ -641,17 +743,43 @@ bool ObGenDlg::CreateAnalyticString(CString& str)
 
     // traverse Object vector and create CString
     int n = mObjects.size();
+    std::map<int, std::set<int> > peTraversal;
 
     for (int i = 0; i < n; ++i)
     {
         Object& obj = mObjects[i];
-
         avgx += obj.mX;
         avgy += obj.mY;
         avgz += obj.mZ;
         avgvx += obj.mVx;
         avgvy += obj.mVy;
         avgvz += obj.mVz;
+#if 0
+        ke += (obj.mVx * obj.mVx + obj.mVy * obj.mVy + obj.mVz * obj.mVz) * obj.mMass / 2;
+        std::set<int>& traversed = peTraversal[i];
+
+        for (int j = 0; j < n; ++j)
+        {
+            if (j == i)
+            {
+                continue;
+            }
+
+            Object& obj1 = mObjects[j];
+            std::set<int>::iterator oIt = traversed.find(j);
+
+            if (oIt != traversed.end())
+            {
+                continue;
+            }
+
+            traversed.insert(j);
+
+            // Gm0m1/r
+            double d = std::sqrt((obj.mX - obj1.mX) * (obj.mX - obj1.mX) + (obj.mY - obj1.mY) * (obj.mY - obj1.mY) + (obj.mZ - obj1.mZ) * (obj.mZ - obj1.mZ));
+            pe += G * obj.mMass * obj1.mMass / d;
+        }
+#endif
     }
 
     avgx /= n;
@@ -754,12 +882,22 @@ bool ObGenDlg::CreateAnalyticString(CString& str)
         locdist = "Uniform";
         break;
     case 1:
+        mdist = "Uniform weighted low";
+        break;
+    case 2:
+        mdist = "Uniform weighted lower";
+        break;
+    case 3:
         locdist = "Exponential";
         break;
     }
 
-    analyticstr.Format(_T("Number of objects: %d, Mass: min %g, max %g, distribution %s, Velocity/Momentum: min %g, max %g, distribution %s, Radius: %g, distribution %s, lambda %g\r\nAverage location: %g, %g, %g\r\nAverage velocity: %g, %g, %g\r\n Total mass: %g\r\n Average mass: %g\r\nCenter of Mass: %g, %g, %g\r\nMomentum: %g, %g, %g\r\nAng Momentum: %g, %g, %g"),
-        n, mMassMin, mMassMax, mdist, mVMMin, mVMMax, vmdist, mVolumeRad, locdist, mLambda, avgx, avgy, avgz, avgvx, avgvy, avgvz, totmass, totmass / n, xc, yc, zc, totmomx , totmomy, totmomz, angmomx, angmomy, angmomz);
+    analyticstr.Format(_T("Number of objects: %d, Mass: min %g, max %g, distribution %s, Velocity/Momentum: min %g, max %g, distribution %s, Radius: %g, distribution %s, lambda %g\r\nAverage location: %g, %g, %g\r\nAverage velocity: %g, %g, %g\r\n Total mass: %g\r\n Average mass: %g\r\nCenter of Mass: %g, %g, %g\r\nMomentum: %g, %g, %g\r\nAng Momentum: %g, %g, %g\r\nOverlaps: %d"),
+        n, mMassMin, mMassMax, mdist, mVMMin, mVMMax, vmdist, mVolumeRad, locdist, mLambda, avgx, avgy, avgz, avgvx, avgvy, avgvz, totmass, totmass / n, xc, yc, zc, totmomx, totmomy, totmomz, angmomx, angmomy, angmomz, hasOverlap);
+#if 0
+    analyticstr.Format(_T("Number of objects: %d, Mass: min %g, max %g, distribution %s, Velocity/Momentum: min %g, max %g, distribution %s, Radius: %g, distribution %s, lambda %g\r\nAverage location: %g, %g, %g\r\nAverage velocity: %g, %g, %g\r\n Total mass: %g\r\n Average mass: %g\r\nCenter of Mass: %g, %g, %g\r\nMomentum: %g, %g, %g\r\nAng Momentum: %g, %g, %g\r\nKE: %g, PE: %g"),
+        n, mMassMin, mMassMax, mdist, mVMMin, mVMMax, vmdist, mVolumeRad, locdist, mLambda, avgx, avgy, avgz, avgvx, avgvy, avgvz, totmass, totmass / n, xc, yc, zc, totmomx , totmomy, totmomz, angmomx, angmomy, angmomz, ke, pe);
+#endif
     str += analyticstr;
     return true;
 }
@@ -842,7 +980,7 @@ bool ObGenDlg::WriteData(CString& fname, CString& ext)
 
     CT2CA convertedAnsiString(optionstr);
     std::string opts(convertedAnsiString);
-    ofs << "Options: " << opts << std::endl;
+    ofs << "#Options: " << opts << std::endl;
 
     // traverse Object vector and create CString
     int n = mObjects.size();
@@ -850,7 +988,13 @@ bool ObGenDlg::WriteData(CString& fname, CString& ext)
     for (int i = 0; i < n; ++i)
     {
         Object& obj = mObjects[i];
-        ofs << obj.mX << obj.mY << obj.mZ << obj.mVx << obj.mVy << obj.mVz << obj.mMass << std::endl;
+        ofs << obj.mX << " " 
+            << obj.mY << " "
+            << obj.mZ << " " 
+            << obj.mVx << " " 
+            << obj.mVy << " " 
+            << obj.mVz << " " 
+            << obj.mMass << std::endl;
     }
 
     ofs.close();
@@ -887,4 +1031,132 @@ void ObGenDlg::OnBnClickedFindSim()
     {
         GetDlgItem(IDC_SIM_PATH)->SetWindowText(dlg.GetPathName());
     }
+}
+
+
+void ObGenDlg::OnCbnSelchangeLocDist()
+{
+    mDataChanged = true;
+}
+
+bool ObGenDlg::AdjustLocForOverlap(double& x, double& y, double& z, double radius, int& xflag, int& xflag2, int& yflag, int& yflag2, int& zflag, int& zflag2)
+{
+    // see whether there's any overlap with existing objects
+    // if so, adjust until there's not
+    // use flags initially to test overlap
+    int n = mObjects.size();
+    int counter = 0;
+    bool initialOverlap = false;
+
+    for (int i = 0; i < n; )
+    {
+        Object& obj = mObjects[i];
+        bool overlap = (obj.mXflag & xflag || obj.mXflag2 & xflag2) && (obj.mYflag & yflag || obj.mYflag2 & yflag2) && (obj.mZflag & zflag || obj.mZflag2 & zflag2);
+
+        if (overlap)
+        {
+            // check whether there's room
+            double r2 = (obj.mX - x) * (obj.mX - x) + (obj.mY - y) * (obj.mY - y) + (obj.mZ - z) * (obj.mZ - z);
+            double rad2 = (obj.mRadius + radius) * (obj.mRadius + radius);
+
+            if (r2 > rad2)
+            {
+                // no problem
+                ++i;
+                continue;
+            }
+            else
+            {
+                initialOverlap = true;
+                // get new coords and try again
+                x = GetLoc(mVolumeRad, mLocationDist);
+                y = GetLoc(mVolumeRad, mLocationDist);
+                z = GetLoc(mVolumeRad, mLocationDist);
+                CalcFlags(x, y, z, xflag, xflag2, yflag, yflag2, zflag, zflag2);
+
+                // start over checking objects
+                i = 0;
+
+                if (++counter > 1000)
+                {
+                    // is the dpace too small?
+                    assert(counter < 1000);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            counter = 0;
+            ++i;
+        }
+    }
+
+    if (initialOverlap)
+    {
+        hasOverlap++;
+    }
+
+    return counter < 1000;
+}
+
+void ObGenDlg::CalcFlags(double x, double y, double z, int& xflag, int& xflag2, int& yflag, int& yflag2, int& zflag, int& zflag2)
+{
+    // set up loc flags, based on 2 * mVolumeRad, 1 / 32 per bit
+    int fullShift = (int)(((x + mVolumeRad) * 16 / mVolumeRad));
+
+    if (fullShift > 31)
+    {
+        fullShift = 31;
+    }
+
+    xflag = 1 << fullShift;
+
+    // also set up loc2 flags, 1/2 a division over from loc flags
+    int halfShift = (int)(((x + mVolumeRad) * 16 / mVolumeRad) + (mVolumeRad / 32));
+
+    if (halfShift > 31)
+    {
+        halfShift = 31;
+    }
+
+    xflag2 = 1 << halfShift;
+
+    fullShift = (int)(((y + mVolumeRad) * 16 / mVolumeRad));
+
+    if (fullShift > 31)
+    {
+        fullShift = 31;
+    }
+
+    yflag = 1 << fullShift;
+
+    // also set up loc2 flags, 1/2 a division over from loc flags
+    halfShift = (int)(((y + mVolumeRad) * 16 / mVolumeRad) + (mVolumeRad / 32));
+
+    if (halfShift > 31)
+    {
+        halfShift = 31;
+    }
+
+    yflag2 = 1 << halfShift;
+
+    fullShift = (int)(((z + mVolumeRad) * 16 / mVolumeRad));
+
+    if (fullShift > 31)
+    {
+        fullShift = 31;
+    }
+
+    zflag = 1 << fullShift;
+
+    // also set up loc2 flags, 1/2 a division over from loc flags
+    halfShift = (int)(((z + mVolumeRad) * 16 / mVolumeRad) + (mVolumeRad / 32));
+
+    if (halfShift > 31)
+    {
+        halfShift = 31;
+    }
+
+    zflag2 = 1 << halfShift;
 }

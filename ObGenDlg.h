@@ -3,15 +3,20 @@
 //
 
 #pragma once
+
+// to get M_PI
+#define _USE_MATH_DEFINES 
+
 #include "stdafx.h"
 #include "afxdialogex.h"
 
 #include <string>
 #include <vector>
+#include <cmath>
 
 struct Object
 {
-    Object(double mass, double x, double y, double z, double vx, double vy, double vz)
+    Object(double mass, double x, double y, double z, double vx, double vy, double vz, double radius, int xflag, int xflag2, int yflag, int yflag2, int zflag, int zflag2)
     {
         mMass = mass;
         mX = x;
@@ -20,8 +25,16 @@ struct Object
         mVx = vx;
         mVy = vy;
         mVz = vz;
+        mRadius = radius;
+        mXflag = xflag;
+        mXflag2 = xflag2;
+        mYflag = yflag;
+        mYflag2 = yflag2;
+        mZflag = zflag;
+        mZflag2 = zflag2;
     }
 
+    double  mRadius;
     double  mMass;
     double  mX;
     double  mY;
@@ -29,6 +42,12 @@ struct Object
     double  mVx;
     double  mVy;
     double  mVz;
+    int     mXflag;
+    int     mXflag2;
+    int     mYflag;
+    int     mYflag2;
+    int     mZflag;
+    int     mZflag2;
 };
 
 // ObGenDlg dialog
@@ -41,6 +60,8 @@ public:
     bool    CreateObjects(void);
     double  GetMass(double min, double max, int dist);
     double  GetLoc(double locmax, int dist);
+    void    CalcFlags(double x, double y, double z, int& xflag, int& xflag2, int& yflag, int& yflag2, int& zflag, int& zflag2);
+    bool    AdjustLocForOverlap(double& x, double& y, double& z, double radius, int& xflag, int& xflag2, int& yflag, int& yflag2, int& zflag, int& zflag2);
     double  GetVP(double mass, double min, double max, int dist);
     bool    WriteData(CString& fname, CString& ext);
     void    ShowData(CString& str);
@@ -61,7 +82,7 @@ private:
 
     // environment
     double  mVolumeRad;
-    int     mLocationDist; // 0 -> uniform, 1 -> exponential
+    int     mLocationDist;
     double  mLambda;
 
     CString mFName;
@@ -89,8 +110,8 @@ protected:
     DECLARE_MESSAGE_MAP()
 
 public:
-    afx_msg void OnBnClickedUniformDist();
-    afx_msg void OnBnClickedExpDist();
+//    afx_msg void OnBnClickedUniformDist();
+//    afx_msg void OnBnClickedExpDist();
     afx_msg void OnBnClickedOk();
     afx_msg void OnBnClickedView();
     afx_msg void OnBnClickedSimulate();
@@ -109,4 +130,5 @@ public:
     afx_msg void OnEnChangeOptTstep();
     afx_msg void OnEnChangeOptMinvel();
     afx_msg void OnBnClickedFindSim();
+    afx_msg void OnCbnSelchangeLocDist();
 };
