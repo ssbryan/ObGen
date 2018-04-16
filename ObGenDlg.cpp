@@ -10,6 +10,8 @@
 #include <set>
 #include <random>
 #include <fstream>
+#define _USE_MATH_DEFINES 
+#include <cmath>  
 #include <io.h>
 #include <assert.h>
 
@@ -23,7 +25,7 @@ double GetUniformRandomDouble(double rmin, double rmax);
 double GetExponentialRandomDouble(double rmax);
 
 // count of initially overlapping locs
-static int hasOverlap = 0;
+int hasOverlap = 0;
 
 // CAboutDlg dialog used for App About
 
@@ -425,6 +427,7 @@ bool ObGenDlg::CreateObjects(void)
     // sort based on mass, with higher mass objects first
     // scale momentum from origin
     hasOverlap = 0;
+    CWaitCursor cur;
 
     if (!Validate())
     {
@@ -445,9 +448,18 @@ bool ObGenDlg::CreateObjects(void)
     for (int i = 0; i < mNumObjects; ++i)
     {
         double m = GetMass(mMassMin, mMassMax, mMassDist);
+#if 0
         double x = GetLoc(mVolumeRad, mLocationDist);
         double y = GetLoc(mVolumeRad, mLocationDist);
         double z = GetLoc(mVolumeRad, mLocationDist);
+#else
+        double r = GetLoc(mVolumeRad, mLocationDist);
+        double theta = GetLoc(M_PI, 0);
+        double phi = GetLoc(2 * M_PI, 0);
+        double x = r * std::sin(theta) * std::cos(phi);
+        double y = r * std::sin(theta) * std::sin(phi);
+        double z = r * std::cos(theta);
+#endif
         int xflag = 0;
         int yflag = 0;
         int zflag = 0;
@@ -474,12 +486,13 @@ bool ObGenDlg::CreateObjects(void)
         // R = (3 * V / (4 * pi))^(1/3)
         double radius = pow(3 * v / (4 * M_PI), 0.33333333);
 
-        AdjustLocForOverlap(x, y, z, radius, xflag, xflag2, yflag, yflag2, zflag, zflag2);
-
-        double vx = GetVP(m, mVMMin, mVMMax, mVMDist);
-        double vy = GetVP(m, mVMMin, mVMMax, mVMDist);
-        double vz = GetVP(m, mVMMin, mVMMax, mVMDist);
-        mObjects.push_back(Object(m, x, y, z, vx, vy, vz, radius, xflag, xflag2, yflag, yflag2, zflag, zflag2));
+        if (AdjustLocForOverlap(x, y, z, radius, xflag, xflag2, yflag, yflag2, zflag, zflag2))
+        {
+            double vx = GetVP(m, mVMMin, mVMMax, mVMDist);
+            double vy = GetVP(m, mVMMin, mVMMax, mVMDist);
+            double vz = GetVP(m, mVMMin, mVMMax, mVMDist);
+            mObjects.push_back(Object(m, x, y, z, vx, vy, vz, radius, xflag, xflag2, yflag, yflag2, zflag, zflag2));
+        }
     }
 
     // mark so we can reuse Objects
@@ -582,14 +595,15 @@ double ObGenDlg::GetLoc(double locmax, int dist)
         }
 
         d = GetExponentialRandomDouble(val);
+        d *= locmax;
         break;
     }
     }
 
-    if (rand() > RAND_MAX / 2)
-    {
-        d = -d;
-    }
+//    if (rand() > RAND_MAX / 2)
+//    {
+//        d = -d;
+//    }
 
     return d;
 }
@@ -718,6 +732,7 @@ bool ObGenDlg::CreateAnalyticString(CString& str)
     // kinetic and potential energy
     double ke = 0;
     double pe = 0;
+    CWaitCursor cur;
 
     if (mDataChanged)
     {
@@ -826,6 +841,7 @@ bool ObGenDlg::CreateAnalyticString(CString& str)
     double angmomx = 0.0;
     double angmomy = 0.0;
     double angmomz = 0.0;
+    double totvol = 0;
 
     for (int i = 0; i < n; i++)
     {
@@ -836,7 +852,10 @@ bool ObGenDlg::CreateAnalyticString(CString& str)
         angmomx += obj.mMass * (obj.mVx * dist - (obj.mVx - xc) * dot / dist);
         angmomy += obj.mMass * (obj.mVy * dist - (obj.mVy - xc) * dot / dist);
         angmomz += obj.mMass * (obj.mVz * dist - (obj.mVz - xc) * dot / dist);
+        totvol += (obj.mRadius * obj.mRadius * obj.mRadius);
     }
+
+    double packing = totvol / (mVolumeRad * mVolumeRad * mVolumeRad);
 
     CString mdist;
 
@@ -892,8 +911,8 @@ bool ObGenDlg::CreateAnalyticString(CString& str)
         break;
     }
 
-    analyticstr.Format(_T("Number of objects: %d, Mass: min %g, max %g, distribution %s, Velocity/Momentum: min %g, max %g, distribution %s, Radius: %g, distribution %s, lambda %g\r\nAverage location: %g, %g, %g\r\nAverage velocity: %g, %g, %g\r\n Total mass: %g\r\n Average mass: %g\r\nCenter of Mass: %g, %g, %g\r\nMomentum: %g, %g, %g\r\nAng Momentum: %g, %g, %g\r\nOverlaps: %d"),
-        n, mMassMin, mMassMax, mdist, mVMMin, mVMMax, vmdist, mVolumeRad, locdist, mLambda, avgx, avgy, avgz, avgvx, avgvy, avgvz, totmass, totmass / n, xc, yc, zc, totmomx, totmomy, totmomz, angmomx, angmomy, angmomz, hasOverlap);
+    analyticstr.Format(_T("Number of objects: %d, Mass: min %g, max %g, distribution %s, Velocity/Momentum: min %g, max %g, distribution %s, Radius: %g, distribution %s, lambda %g\r\nAverage location: %g, %g, %g\r\nAverage velocity: %g, %g, %g\r\n Total mass: %g\r\n Average mass: %g\r\nCenter of Mass: %g, %g, %g\r\nMomentum: %g, %g, %g\r\nAng Momentum: %g, %g, %g\r\nOverlaps: %d\r\nPacking: %g"),
+        n, mMassMin, mMassMax, mdist, mVMMin, mVMMax, vmdist, mVolumeRad, locdist, mLambda, avgx, avgy, avgz, avgvx, avgvy, avgvz, totmass, totmass / n, xc, yc, zc, totmomx, totmomy, totmomz, angmomx, angmomy, angmomz, hasOverlap, packing);
 #if 0
     analyticstr.Format(_T("Number of objects: %d, Mass: min %g, max %g, distribution %s, Velocity/Momentum: min %g, max %g, distribution %s, Radius: %g, distribution %s, lambda %g\r\nAverage location: %g, %g, %g\r\nAverage velocity: %g, %g, %g\r\n Total mass: %g\r\n Average mass: %g\r\nCenter of Mass: %g, %g, %g\r\nMomentum: %g, %g, %g\r\nAng Momentum: %g, %g, %g\r\nKE: %g, PE: %g"),
         n, mMassMin, mMassMax, mdist, mVMMin, mVMMax, vmdist, mVolumeRad, locdist, mLambda, avgx, avgy, avgz, avgvx, avgvy, avgvz, totmass, totmass / n, xc, yc, zc, totmomx , totmomy, totmomz, angmomx, angmomy, angmomz, ke, pe);
@@ -906,6 +925,9 @@ bool ObGenDlg::WriteData(CString& fname, CString& ext)
 {
     std::ofstream ofs;
     ofs.open(fname.GetString(), std::ofstream::out);
+    std::ofstream ofsDisplay;
+    CString fnameDisp = fname + ".js";
+    ofsDisplay.open(fnameDisp.GetString(), std::ofstream::out);
     bool isOkay = true;
 
     if (mDataChanged)
@@ -981,6 +1003,8 @@ bool ObGenDlg::WriteData(CString& fname, CString& ext)
     CT2CA convertedAnsiString(optionstr);
     std::string opts(convertedAnsiString);
     ofs << "#Options: " << opts << std::endl;
+    ofsDisplay << "let sphereArray = [";
+    ofsDisplay << std::endl;
 
     // traverse Object vector and create CString
     int n = mObjects.size();
@@ -995,9 +1019,17 @@ bool ObGenDlg::WriteData(CString& fname, CString& ext)
             << obj.mVy << " " 
             << obj.mVz << " " 
             << obj.mMass << std::endl;
+        ofsDisplay << obj.mX << ", "
+            << obj.mY << ", "
+            << obj.mZ << ", "
+            << obj.mRadius << ", " << std::endl;
     }
 
     ofs.close();
+
+    ofsDisplay << "];";
+    ofsDisplay << std::endl;
+    ofsDisplay.close();
 
     CString astr;
     CreateAnalyticString(astr);
@@ -1069,9 +1101,18 @@ bool ObGenDlg::AdjustLocForOverlap(double& x, double& y, double& z, double radiu
             {
                 initialOverlap = true;
                 // get new coords and try again
+#if 0
                 x = GetLoc(mVolumeRad, mLocationDist);
                 y = GetLoc(mVolumeRad, mLocationDist);
                 z = GetLoc(mVolumeRad, mLocationDist);
+#else
+                double r = GetLoc(mVolumeRad, mLocationDist);
+                double theta = GetLoc(M_PI, 0);
+                double phi = GetLoc(2 * M_PI, 0);
+                x = r * std::sin(theta) * std::cos(phi);
+                y = r * std::sin(theta) * std::sin(phi);
+                z = r * std::cos(theta);
+#endif
                 CalcFlags(x, y, z, xflag, xflag2, yflag, yflag2, zflag, zflag2);
 
                 // start over checking objects
@@ -1080,7 +1121,7 @@ bool ObGenDlg::AdjustLocForOverlap(double& x, double& y, double& z, double radiu
                 if (++counter > 1000)
                 {
                     // is the dpace too small?
-                    assert(counter < 1000);
+                    //assert(counter < 1000);
                     break;
                 }
             }
